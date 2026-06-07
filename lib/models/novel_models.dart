@@ -8,6 +8,29 @@ String stableId(String value) {
   return base64Url.encode(utf8.encode(value)).replaceAll('=', '');
 }
 
+String _safeString(dynamic value, [String fallback = '']) {
+  if (value is String) return value;
+  if (value == null) return fallback;
+  return value.toString();
+}
+
+bool _safeBool(dynamic value, [bool fallback = false]) {
+  if (value is bool) return value;
+  return fallback;
+}
+
+int _safeInt(dynamic value, [int fallback = 0]) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  return fallback;
+}
+
+double _safeDouble(dynamic value, [double fallback = 0]) {
+  if (value is double) return value;
+  if (value is num) return value.toDouble();
+  return fallback;
+}
+
 class SearchSource {
   const SearchSource({
     required this.id,
@@ -51,10 +74,10 @@ class SearchSource {
 
   factory SearchSource.fromJson(Map<String, Object?> json) {
     return SearchSource(
-      id: json['id'] as String,
-      name: json['name'] as String,
-      urlTemplate: json['urlTemplate'] as String,
-      enabled: json['enabled'] as bool? ?? true,
+      id: _safeString(json['id'], 'unknown'),
+      name: _safeString(json['name'], '未命名来源'),
+      urlTemplate: _safeString(json['urlTemplate'], ''),
+      enabled: _safeBool(json['enabled'], true),
     );
   }
 }
@@ -108,10 +131,10 @@ class Chapter {
 
   factory Chapter.fromJson(Map<String, Object?> json) {
     return Chapter(
-      title: json['title'] as String,
-      url: json['url'] as String,
-      content: json['content'] as String? ?? '',
-      nextUrl: json['nextUrl'] as String?,
+      title: _safeString(json['title'], '未命名章节'),
+      url: _safeString(json['url'], ''),
+      content: _safeString(json['content']),
+      nextUrl: json['nextUrl'] is String ? json['nextUrl'] as String : null,
     );
   }
 }
@@ -126,6 +149,8 @@ class Book {
     this.chapters = const [],
     this.currentChapterIndex = 0,
     this.lastReadAt,
+    this.scrollPosition = 0,
+    this.chapterProgress = 0,
   });
 
   final String id;
@@ -136,6 +161,8 @@ class Book {
   final List<Chapter> chapters;
   final int currentChapterIndex;
   final DateTime? lastReadAt;
+  final double scrollPosition; // for scroll modes
+  final double chapterProgress; // 0-1 for flip mode
 
   Book copyWith({
     String? id,
@@ -146,6 +173,8 @@ class Book {
     List<Chapter>? chapters,
     int? currentChapterIndex,
     DateTime? lastReadAt,
+    double? scrollPosition,
+    double? chapterProgress,
   }) {
     return Book(
       id: id ?? this.id,
@@ -156,6 +185,8 @@ class Book {
       chapters: chapters ?? this.chapters,
       currentChapterIndex: currentChapterIndex ?? this.currentChapterIndex,
       lastReadAt: lastReadAt ?? this.lastReadAt,
+      scrollPosition: scrollPosition ?? this.scrollPosition,
+      chapterProgress: chapterProgress ?? this.chapterProgress,
     );
   }
 
@@ -169,55 +200,63 @@ class Book {
       'chapters': chapters.map((chapter) => chapter.toJson()).toList(),
       'currentChapterIndex': currentChapterIndex,
       'lastReadAt': lastReadAt?.toIso8601String(),
+      'scrollPosition': scrollPosition,
+      'chapterProgress': chapterProgress,
     };
   }
 
   factory Book.fromJson(Map<String, Object?> json) {
     return Book(
-      id: json['id'] as String,
-      title: json['title'] as String,
-      url: json['url'] as String,
-      sourceId: json['sourceId'] as String,
-      sourceName: json['sourceName'] as String,
+      id: _safeString(json['id'], 'unknown'),
+      title: _safeString(json['title'], '未命名书籍'),
+      url: _safeString(json['url'], ''),
+      sourceId: _safeString(json['sourceId'], 'unknown'),
+      sourceName: _safeString(json['sourceName'], '未知来源'),
       chapters: (json['chapters'] as List<dynamic>? ?? [])
           .map((chapter) => Chapter.fromJson(chapter as Map<String, Object?>))
           .toList(),
-      currentChapterIndex: json['currentChapterIndex'] as int? ?? 0,
-      lastReadAt: json['lastReadAt'] == null
-          ? null
-          : DateTime.parse(json['lastReadAt'] as String),
+      currentChapterIndex: _safeInt(json['currentChapterIndex']),
+      lastReadAt: json['lastReadAt'] is String
+          ? DateTime.tryParse(json['lastReadAt'] as String)
+          : null,
+      scrollPosition: _safeDouble(json['scrollPosition']),
+      chapterProgress: _safeDouble(json['chapterProgress']),
     );
   }
 }
 
 enum ReaderTheme { paper, green, dark, pureWhite }
 
-enum PageTurnMode { verticalScroll, tapSides }
+enum PageTurnMode { verticalScroll, tapSides, horizontalFlip }
 
 class ReaderSettings {
   const ReaderSettings({
     this.fontSize = 20,
     this.lineHeight = 1.65,
     this.theme = ReaderTheme.paper,
-    this.pageTurnMode = PageTurnMode.verticalScroll,
+    this.pageTurnMode = PageTurnMode.horizontalFlip,
+    this.enableFlipAnimation = true,
   });
 
   final double fontSize;
   final double lineHeight;
   final ReaderTheme theme;
   final PageTurnMode pageTurnMode;
+  final bool enableFlipAnimation;
 
   ReaderSettings copyWith({
     double? fontSize,
     double? lineHeight,
     ReaderTheme? theme,
     PageTurnMode? pageTurnMode,
+    bool? enableFlipAnimation,
   }) {
     return ReaderSettings(
       fontSize: fontSize ?? this.fontSize,
       lineHeight: lineHeight ?? this.lineHeight,
       theme: theme ?? this.theme,
       pageTurnMode: pageTurnMode ?? this.pageTurnMode,
+      enableFlipAnimation: enableFlipAnimation ?? this.enableFlipAnimation,
     );
   }
 
@@ -227,21 +266,23 @@ class ReaderSettings {
       'lineHeight': lineHeight,
       'theme': theme.name,
       'pageTurnMode': pageTurnMode.name,
+      'enableFlipAnimation': enableFlipAnimation,
     };
   }
 
   factory ReaderSettings.fromJson(Map<String, Object?> json) {
     return ReaderSettings(
-      fontSize: (json['fontSize'] as num?)?.toDouble() ?? 20,
-      lineHeight: (json['lineHeight'] as num?)?.toDouble() ?? 1.65,
+      fontSize: _safeDouble(json['fontSize'], 20),
+      lineHeight: _safeDouble(json['lineHeight'], 1.65),
       theme: ReaderTheme.values.firstWhere(
         (theme) => theme.name == json['theme'],
         orElse: () => ReaderTheme.paper,
       ),
       pageTurnMode: PageTurnMode.values.firstWhere(
         (mode) => mode.name == json['pageTurnMode'],
-        orElse: () => PageTurnMode.verticalScroll,
+        orElse: () => PageTurnMode.horizontalFlip,
       ),
+      enableFlipAnimation: _safeBool(json['enableFlipAnimation'], true),
     );
   }
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../models/novel_models.dart';
 import '../services/app_controller.dart';
 import '../services/controller_scope.dart';
 
@@ -15,6 +16,80 @@ class SettingsScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
+          // ── Reader defaults ──
+          const _SectionTitle(title: '阅读偏好'),
+          ListTile(
+            title: const Text('字体大小'),
+            subtitle: Slider(
+              min: 16,
+              max: 30,
+              divisions: 14,
+              value: controller.readerSettings.fontSize,
+              label: controller.readerSettings.fontSize.round().toString(),
+              onChanged: (value) => controller.updateReaderSettings(
+                controller.readerSettings.copyWith(fontSize: value),
+              ),
+            ),
+            trailing: Text('${controller.readerSettings.fontSize.round()}'),
+          ),
+          ListTile(
+            title: const Text('行间距'),
+            subtitle: Slider(
+              min: 1.3,
+              max: 2,
+              divisions: 7,
+              value: controller.readerSettings.lineHeight,
+              label: controller.readerSettings.lineHeight.toStringAsFixed(1),
+              onChanged: (value) => controller.updateReaderSettings(
+                controller.readerSettings.copyWith(lineHeight: value),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: SegmentedButton<ReaderTheme>(
+              segments: const [
+                ButtonSegment(value: ReaderTheme.paper, label: Text('米黄')),
+                ButtonSegment(value: ReaderTheme.green, label: Text('护眼')),
+                ButtonSegment(value: ReaderTheme.pureWhite, label: Text('白天')),
+                ButtonSegment(value: ReaderTheme.dark, label: Text('夜间')),
+              ],
+              selected: {controller.readerSettings.theme},
+              onSelectionChanged: (selected) =>
+                  controller.updateReaderSettings(
+                controller.readerSettings.copyWith(theme: selected.first),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: SegmentedButton<PageTurnMode>(
+              segments: const [
+                ButtonSegment(
+                    value: PageTurnMode.horizontalFlip, label: Text('左右翻页')),
+                ButtonSegment(
+                    value: PageTurnMode.verticalScroll, label: Text('滚动')),
+                ButtonSegment(
+                    value: PageTurnMode.tapSides, label: Text('点击翻章')),
+              ],
+              selected: {controller.readerSettings.pageTurnMode},
+              onSelectionChanged: (selected) =>
+                  controller.updateReaderSettings(
+                controller.readerSettings.copyWith(
+                    pageTurnMode: selected.first),
+              ),
+            ),
+          ),
+          SwitchListTile(
+            title: const Text('翻书动画'),
+            value: controller.readerSettings.enableFlipAnimation,
+            onChanged: (value) => controller.updateReaderSettings(
+              controller.readerSettings.copyWith(enableFlipAnimation: value),
+            ),
+          ),
+          const Divider(height: 32),
+
+          // ── Search sources ──
           _SectionTitle(
             title: '搜索来源',
             action: FilledButton.icon(
@@ -25,15 +100,60 @@ class SettingsScreen extends StatelessWidget {
           ),
           ...controller.sources.map(
             (source) => Card(
-              child: SwitchListTile(
-                value: source.enabled,
-                onChanged: (value) => controller.toggleSource(source, value),
-                title: Text(source.name),
-                subtitle: Text(
-                  source.urlTemplate,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
+              child: Column(
+                children: [
+                  SwitchListTile(
+                    value: source.enabled,
+                    onChanged: (value) =>
+                        controller.toggleSource(source, value),
+                    title: Text(source.name),
+                    subtitle: Text(
+                      source.urlTemplate,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  OverflowBar(
+                    children: [
+                      TextButton.icon(
+                        onPressed: () async {
+                          try {
+                            final results =
+                                await controller.testSource(source);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    results.isEmpty
+                                        ? '测试未获得结果'
+                                        : '找到 ${results.length} 条结果',
+                                  ),
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('测试失败：$e')),
+                              );
+                            }
+                          }
+                        },
+                        icon: const Icon(Icons.play_arrow, size: 18),
+                        label: const Text('测试'),
+                      ),
+                      if (source.id != 'bing' && source.id != 'duckduckgo')
+                        TextButton.icon(
+                          onPressed: () =>
+                              controller.removeSource(source),
+                          icon: const Icon(Icons.delete_outline,
+                              size: 18, color: Colors.red),
+                          label: const Text('删除',
+                              style: TextStyle(color: Colors.red)),
+                        ),
+                    ],
+                  ),
+                ],
               ),
             ),
           ),

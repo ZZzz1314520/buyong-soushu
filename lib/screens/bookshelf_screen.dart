@@ -2,18 +2,67 @@ import 'package:flutter/material.dart';
 
 import '../models/novel_models.dart';
 import '../services/controller_scope.dart';
+import 'book_detail_screen.dart';
 import 'reader_screen.dart';
 
-class BookshelfScreen extends StatelessWidget {
+enum _BookshelfSort { lastRead, recentlyAdded, title }
+
+class BookshelfScreen extends StatefulWidget {
   const BookshelfScreen({super.key});
+
+  @override
+  State<BookshelfScreen> createState() => _BookshelfScreenState();
+}
+
+class _BookshelfScreenState extends State<BookshelfScreen> {
+  var _sort = _BookshelfSort.lastRead;
+
+  List<Book> _sorted(List<Book> books) {
+    switch (_sort) {
+      case _BookshelfSort.lastRead:
+        return [...books]..sort(
+            (a, b) => (b.lastReadAt ?? DateTime(2000))
+                .compareTo(a.lastReadAt ?? DateTime(2000)),
+          );
+      case _BookshelfSort.recentlyAdded:
+        return books; // already in add-order
+      case _BookshelfSort.title:
+        return [...books]..sort(
+            (a, b) => a.title.compareTo(b.title),
+          );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final controller = ControllerScope.of(context);
-    final books = controller.books;
+    final books = _sorted(controller.books);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('我的书架')),
+      appBar: AppBar(
+        title: const Text('我的书架'),
+        actions: [
+          PopupMenuButton<_BookshelfSort>(
+            tooltip: '排序方式',
+            icon: const Icon(Icons.sort),
+            onSelected: (sort) => setState(() => _sort = sort),
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: _BookshelfSort.lastRead,
+                child: Text('最近阅读'),
+              ),
+              const PopupMenuItem(
+                value: _BookshelfSort.recentlyAdded,
+                child: Text('最近添加'),
+              ),
+              const PopupMenuItem(
+                value: _BookshelfSort.title,
+                child: Text('书名'),
+              ),
+            ],
+          ),
+        ],
+      ),
       body: books.isEmpty
           ? const _EmptyShelf()
           : ListView.separated(
@@ -27,6 +76,11 @@ class BookshelfScreen extends StatelessWidget {
                   onRead: () => Navigator.of(context).push(
                     MaterialPageRoute(
                       builder: (_) => ReaderScreen(bookId: book.id),
+                    ),
+                  ),
+                  onDetail: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => BookDetailScreen(bookId: book.id),
                     ),
                   ),
                   onRemove: () => controller.removeBook(book),
@@ -75,11 +129,13 @@ class _BookCard extends StatelessWidget {
   const _BookCard({
     required this.book,
     required this.onRead,
+    required this.onDetail,
     required this.onRemove,
   });
 
   final Book book;
   final VoidCallback onRead;
+  final VoidCallback onDetail;
   final VoidCallback onRemove;
 
   @override
@@ -92,6 +148,7 @@ class _BookCard extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
         onTap: onRead,
+        onLongPress: onDetail,
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Row(
@@ -127,6 +184,32 @@ class _BookCard extends StatelessWidget {
                       style: TextStyle(color: Colors.grey.shade700),
                     ),
                     const SizedBox(height: 4),
+                    if (book.chapters.isNotEmpty) ...[
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(2),
+                              child: LinearProgressIndicator(
+                                value: (book.currentChapterIndex + 1) /
+                                    book.chapters.length,
+                                minHeight: 3,
+                                backgroundColor: Colors.grey.shade200,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            '${book.currentChapterIndex + 1}/${book.chapters.length}章',
+                            style: TextStyle(
+                              color: Colors.grey.shade500,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                    ],
                     Text(
                       book.sourceName,
                       style: TextStyle(

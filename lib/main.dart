@@ -10,22 +10,43 @@ import 'services/novel_service.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final preferences = await SharedPreferences.getInstance();
+  final library = LocalLibrary(preferences);
+
+  // Run one-time migration from old SharedPreferences storage → files
+  final migratedBooks = await library.migrateBooks();
+  // Load books from file storage
+  final books = migratedBooks.isNotEmpty
+      ? migratedBooks
+      : await library.loadBooks();
+
   final controller = AppController(
-    library: LocalLibrary(preferences),
+    library: library,
     novelService: NovelService(),
+    initialBooks: books,
   );
   runApp(NovelReaderApp(controller: controller));
 }
 
-class NovelReaderApp extends StatelessWidget {
+class NovelReaderApp extends StatefulWidget {
   const NovelReaderApp({super.key, required this.controller});
 
   final AppController controller;
 
   @override
+  State<NovelReaderApp> createState() => _NovelReaderAppState();
+}
+
+class _NovelReaderAppState extends State<NovelReaderApp> {
+  @override
+  void dispose() {
+    widget.controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return ControllerScope(
-      controller: controller,
+      controller: widget.controller,
       child: MaterialApp(
         title: '不用搜书',
         debugShowCheckedModeBanner: false,

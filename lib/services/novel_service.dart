@@ -21,6 +21,10 @@ class NovelService {
     }
 
     final enabledSources = sources.where((source) => source.enabled).toList();
+    if (enabledSources.isEmpty) {
+      return [];
+    }
+
     final searches = enabledSources.map((source) async {
       final uri = source.buildUri(trimmed);
       try {
@@ -44,11 +48,17 @@ class NovelService {
 
     final grouped = await Future.wait(searches);
     final seen = <String>{};
-    return grouped
+    final results = grouped
         .expand((result) => result)
         .where((result) => seen.add(result.url))
         .take(50)
         .toList();
+
+    if (results.isEmpty && grouped.every((list) => list.isEmpty)) {
+      throw Exception('所有搜索来源都未能返回结果，请检查网络或尝试其他关键词');
+    }
+
+    return results;
   }
 
   Future<Book> buildBookFromResult(BookSearchResult result) async {
@@ -145,6 +155,10 @@ class NovelService {
       return null;
     }
     return loadChapter(Chapter(title: '\u4e0b\u4e00\u7ae0', url: nextUrl));
+  }
+
+  void dispose() {
+    _client.close();
   }
 
   static const _userAgent =

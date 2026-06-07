@@ -77,6 +77,57 @@ class _SearchScreenState extends State<SearchScreen> {
     }
   }
 
+  Widget _buildEmptyState(BuildContext context) {
+    final controller = ControllerScope.of(context);
+    final history = controller.searchHistory;
+    if (history.isEmpty) {
+      return const Center(child: Text('搜索结果会显示在这里'));
+    }
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+      children: [
+        Row(
+          children: [
+            Text(
+              '最近搜索',
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                color: Colors.grey.shade700,
+                fontSize: 14,
+              ),
+            ),
+            const Spacer(),
+            TextButton(
+              onPressed: () {
+                controller.clearSearchHistory();
+                setState(() {});
+              },
+              child: const Text('清空', style: TextStyle(fontSize: 13)),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 8,
+          runSpacing: 6,
+          children: history.map((query) {
+            return InputChip(
+              label: Text(query),
+              onPressed: () {
+                _queryController.text = query;
+                _search();
+              },
+              onDeleted: () {
+                controller.removeSearchHistoryItem(query);
+                setState(() {});
+              },
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final enabledCount = ControllerScope.of(
@@ -134,12 +185,26 @@ class _SearchScreenState extends State<SearchScreen> {
           ),
           if (_error != null)
             Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text(_error!, style: const TextStyle(color: Colors.red)),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      _error!,
+                      style: const TextStyle(color: Colors.red),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton.tonal(
+                    onPressed: _search,
+                    child: const Text('重试'),
+                  ),
+                ],
+              ),
             ),
           Expanded(
             child: _results.isEmpty && !_loading
-                ? const Center(child: Text('搜索结果会显示在这里'))
+                ? _buildEmptyState(context)
                 : ListView.separated(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
                     itemCount: _results.length,

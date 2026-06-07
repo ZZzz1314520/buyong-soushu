@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:novel_reader/models/novel_models.dart';
 import 'package:novel_reader/services/app_controller.dart';
@@ -14,7 +16,8 @@ void main() {
   test('AppController persists the fully loaded chapter content', () async {
     SharedPreferences.setMockInitialValues({});
     final preferences = await SharedPreferences.getInstance();
-    final library = LocalLibrary(preferences);
+    final tempDir = await Directory.systemTemp.createTemp('book_test_');
+    final library = LocalLibrary(preferences, testBooksDir: tempDir);
     final book = Book(
       id: 'book-1',
       title: bookTitle,
@@ -25,18 +28,19 @@ void main() {
         Chapter(title: chapterTitle, url: 'https://novel.example/book/1.html'),
       ],
     );
-    await library.saveBooks([book]);
+    await library.saveBook(book);
 
     final controller = AppController(
       library: library,
       novelService: _CachingNovelService(),
+      initialBooks: [book],
     );
 
     final loaded = await controller.ensureChapterLoaded(book, 0);
 
     expect(loaded.content, cachedContent);
     expect(controller.books.single.chapters.single.content, cachedContent);
-    expect(library.loadBooks().single.chapters.single.content, cachedContent);
+    expect((await library.loadBooks()).single.chapters.single.content, cachedContent);
   });
 }
 

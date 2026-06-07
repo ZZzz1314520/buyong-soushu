@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:novel_reader/main.dart';
@@ -32,9 +34,16 @@ void main() {
   testWidgets('user can search, add a book and read it', (tester) async {
     SharedPreferences.setMockInitialValues({});
     final preferences = await SharedPreferences.getInstance();
+    final tempDir = await Directory.systemTemp.createTemp('book_test_');
+    final library = LocalLibrary(preferences, testBooksDir: tempDir);
     final controller = AppController(
-      library: LocalLibrary(preferences),
+      library: library,
       novelService: _FakeNovelService(),
+      initialBooks: await library.loadBooks(),
+    );
+    // Use vertical scroll mode for predictable widget testing
+    controller.updateReaderSettings(
+      controller.readerSettings.copyWith(pageTurnMode: PageTurnMode.verticalScroll),
     );
 
     await tester.pumpWidget(NovelReaderApp(controller: controller));
@@ -69,9 +78,15 @@ void main() {
   testWidgets('settings only exposes search source controls', (tester) async {
     SharedPreferences.setMockInitialValues({});
     final preferences = await SharedPreferences.getInstance();
+    final tempDir = await Directory.systemTemp.createTemp('book_test_');
+    final library = LocalLibrary(preferences, testBooksDir: tempDir);
     final controller = AppController(
-      library: LocalLibrary(preferences),
+      library: library,
       novelService: _FakeNovelService(),
+      initialBooks: await library.loadBooks(),
+    );
+    controller.updateReaderSettings(
+      controller.readerSettings.copyWith(pageTurnMode: PageTurnMode.verticalScroll),
     );
 
     await tester.pumpWidget(NovelReaderApp(controller: controller));

@@ -246,8 +246,19 @@ class NovelParser {
     for (final selector in _contentSelectors) {
       candidates.addAll(document.querySelectorAll(selector));
     }
-    candidates.add(document.body ?? document.documentElement!);
+    final root = document.body ?? document.documentElement;
+    if (root != null) {
+      candidates.add(root);
+    }
 
+    if (candidates.isEmpty) {
+      final fallback = document.body ?? document.documentElement;
+      if (fallback != null) return fallback;
+      // Last resort: wrap raw text in a synthetic element
+      final wrapper = document.createElement('div');
+      wrapper.text = document.body?.text ?? '';
+      return wrapper;
+    }
     candidates.sort((a, b) {
       return _readableScore(b).compareTo(_readableScore(a));
     });

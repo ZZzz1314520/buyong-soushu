@@ -1,33 +1,37 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/novel_models.dart';
+import 'book_file_storage.dart';
+import 'search_history.dart';
 
 class LocalLibrary {
-  LocalLibrary(this._preferences);
+  LocalLibrary(this._preferences, {Directory? testBooksDir})
+    : _bookStorage = BookFileStorage(
+        preferences: _preferences,
+        testDir: testBooksDir,
+      ),
+      searchHistory = SearchHistory(_preferences);
 
-  static const _booksKey = 'bookshelf.books.v1';
   static const _sourcesKey = 'search.sources.v1';
   static const _readerSettingsKey = 'reader.settings.v1';
 
   final SharedPreferences _preferences;
+  final BookFileStorage _bookStorage;
+  final SearchHistory searchHistory;
 
-  List<Book> loadBooks() {
-    final raw = _preferences.getString(_booksKey);
-    if (raw == null || raw.isEmpty) {
-      return [];
-    }
-    final decoded = jsonDecode(raw) as List<dynamic>;
-    return decoded
-        .map((book) => Book.fromJson(book as Map<String, Object?>))
-        .toList();
-  }
+  /// Run the one-time migration from old SharedPreferences books → files.
+  Future<List<Book>> migrateBooks() => _bookStorage.migrateIfNeeded();
 
-  Future<void> saveBooks(List<Book> books) {
-    final raw = jsonEncode(books.map((book) => book.toJson()).toList());
-    return _preferences.setString(_booksKey, raw);
-  }
+  Future<List<Book>> loadBooks() => _bookStorage.loadAllBooks();
+
+  Future<void> saveBooks(List<Book> books) => _bookStorage.saveAllBooks(books);
+
+  Future<void> saveBook(Book book) => _bookStorage.saveBook(book);
+
+  Future<void> deleteBook(String bookId) => _bookStorage.deleteBook(bookId);
 
   List<SearchSource> loadSources() {
     final raw = _preferences.getString(_sourcesKey);
