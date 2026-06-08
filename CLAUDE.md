@@ -64,7 +64,7 @@ LocalLibrary      NovelService
 ```
 
 - **Search**: `SearchScreen` → `controller.search(query)` → `NovelService.searchBooks()` → fetches from each enabled `SearchSource` in parallel, unwraps common search-result redirects, de-duplicates by URL, returns up to 50 results.
-- **Add to shelf**: `SearchScreen._add()` → `controller.addResultToShelf()` → `NovelService.buildBookFromResult()` fetches the book page and builds a `Book` with chapter list (or a single chapter if no catalog found).
+- **Add to shelf**: `SearchScreen._add()` → `controller.addResultToShelf()` → `NovelService.buildBookFromResult()` fetches the book page, follows paged catalog links when a site's chapter list spans multiple pages, and builds a `Book` with the merged chapter list (or a single chapter if no catalog found).
 - **Read**: `ReaderScreen` → `controller.ensureChapterLoaded(book, index)` → `NovelService.loadChapter()` fetches the chapter HTML, follows "next page" links (max 8 pages), concatenates content, and persists the loaded content back to `LocalLibrary`.
 - **Next chapter**: When at the last known chapter, `ReaderScreen._goNext()` calls `controller.appendNextChapter()` which uses the current chapter's `nextUrl` to discover and load the next chapter dynamically.
 
@@ -75,7 +75,7 @@ The parser is designed to work generically across unknown novel websites — no 
 1. **Content extraction**: Tries 15+ CSS selectors (`#content`, `#chaptercontent`, `article`, `.novel-content`, etc.), scores each candidate by text length + paragraph count − link text − ad elements, picks the best one.
 2. **Noise removal**: Strips `script`, `style`, `nav`, `footer`, `header`, `.ads`, `.comments`, pagination links, etc. before extracting readable text.
 3. **Pagination**: Detects "下一页" / "next page" links (distinct from "下一章" / "next chapter").
-4. **Catalog parsing**: Finds all `<a>` links whose text looks like a chapter title (matches patterns like "第X章/节/回/卷"), deduplicates by resolved URL.
+4. **Catalog parsing**: Finds all `<a>` links whose text looks like a chapter title (matches patterns like "第X章/节/回/卷"), deduplicates by resolved URL, and exposes catalog "下一页" links so `NovelService` can merge multi-page chapter lists.
 5. **Search parsing**: Scores links by query relevance, unwraps common search redirects (`uddg`, `q`, `url`, `u`, `to`, `target`), filters out search-engine hostnames (Bing, DuckDuckGo, Google, Baidu, Sogou, 360, Brave, Mojeek, etc.) and navigation text.
 6. **Boilerplate filtering**: Removes common noise lines like "请收藏本站", "手机用户请浏览", etc.
 
@@ -105,7 +105,7 @@ All models are immutable with `copyWith`, have `toJson()`/`factory fromJson()` f
 - Reading settings bottom sheet (font size slider, line height slider, theme segments, flip animation toggle)
 - Chapter catalog bottom sheet (tap to jump)
 - Previous/next chapter buttons in bottom bar
-- Horizontal page turns: left/right swipe changes pages; tapping the left third goes to the previous page, tapping the right third goes to the next page, and tapping the center third does nothing.
+- Horizontal page turns: left/right swipe changes pages; tapping the left third goes to the previous page, tapping the right third goes to the next page, and tapping the center third toggles the hidden app bar and previous/next chapter controls. The page indicator is rendered in the lower-left corner of the reading page.
 
 ## Tests
 

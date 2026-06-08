@@ -17,6 +17,13 @@ class ParsedChapter {
   final String? nextChapterUrl;
 }
 
+class ParsedCatalog {
+  const ParsedCatalog({required this.chapters, this.nextPageUrl});
+
+  final List<Chapter> chapters;
+  final String? nextPageUrl;
+}
+
 class NovelParser {
   static const _contentSelectors = [
     'article',
@@ -90,6 +97,11 @@ class NovelParser {
   }
 
   List<Chapter> parseCatalog(String html, Uri pageUri) {
+    final catalog = parseCatalogPage(html, pageUri);
+    return catalog.chapters.length >= 2 ? catalog.chapters : [];
+  }
+
+  ParsedCatalog parseCatalogPage(String html, Uri pageUri) {
     final document = html_parser.parse(html);
     final anchors = document.querySelectorAll('a[href]');
     final seen = <String>{};
@@ -107,7 +119,17 @@ class NovelParser {
       }
     }
 
-    return chapters.length >= 2 ? chapters : [];
+    final nextPageUrl = _findDirectionalLink(
+      document,
+      pageUri,
+      includeLabels: const ['\u4e0b\u4e00\u9875', '\u4e0b\u9875', 'next'],
+      excludeLabels: const [
+        '\u4e0b\u4e00\u7ae0',
+        '\u4e0b\u7ae0',
+        'next chapter',
+      ],
+    );
+    return ParsedCatalog(chapters: chapters, nextPageUrl: nextPageUrl);
   }
 
   List<BookSearchResult> parseSearchResults({

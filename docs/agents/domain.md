@@ -29,6 +29,8 @@ This is a single-context Flutter application:
 - **Search source**: A user-configurable URL template containing `{query}`.
 - **Bookshelf**: The local saved list of books.
 - **Chapter**: A lazily loaded reading unit with optional `nextUrl`.
+- **Paged catalog**: A chapter list that spans several catalog pages; service code follows catalog "next page" links and merges chapters before saving a book.
 - **Reader settings**: Font, line height, theme, and horizontal page-turn animation settings.
+- **Reader controls**: The app bar and previous/next chapter controls are hidden by default and toggled from the center tap zone.
 
 Prefer these terms in issues, implementation notes, and future refactors.

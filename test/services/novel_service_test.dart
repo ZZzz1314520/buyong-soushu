@@ -77,6 +77,54 @@ void main() {
     expect(book.chapters.first.url, 'https://novel.example/book/1.html');
   });
 
+  test(
+    'NovelService follows paged catalog links when building a book',
+    () async {
+      const bookTitle = '\u6d4b\u8bd5\u5c0f\u8bf4';
+      final requested = <Uri>[];
+      final service = NovelService(
+        client: MockClient((request) async {
+          requested.add(request.url);
+          if (request.url.path.endsWith('catalog_2.html')) {
+            return http.Response.bytes(
+              utf8.encode('''
+            <a href="21.html">\u7b2c\u4e8c\u5341\u4e00\u7ae0 \u518d\u8d77</a>
+            <a href="22.html">\u7b2c\u4e8c\u5341\u4e8c\u7ae0 \u8fdc\u884c</a>
+            '''),
+              200,
+              headers: const {'content-type': 'text/html; charset=utf-8'},
+            );
+          }
+          return http.Response.bytes(
+            utf8.encode('''
+          <a href="1.html">\u7b2c\u4e00\u7ae0 \u521d\u89c1</a>
+          <a href="2.html">\u7b2c\u4e8c\u7ae0 \u98ce\u8d77</a>
+          <a href="catalog_2.html">\u4e0b\u4e00\u9875</a>
+          '''),
+            200,
+            headers: const {'content-type': 'text/html; charset=utf-8'},
+          );
+        }),
+      );
+
+      final book = await service.buildBookFromResult(
+        const BookSearchResult(
+          title: bookTitle,
+          url: 'https://novel.example/book/catalog.html',
+          sourceId: 'test',
+          sourceName: 'test source',
+        ),
+      );
+
+      expect(requested.map((uri) => uri.path), [
+        '/book/catalog.html',
+        '/book/catalog_2.html',
+      ]);
+      expect(book.chapters, hasLength(4));
+      expect(book.chapters.last.url, 'https://novel.example/book/22.html');
+    },
+  );
+
   test('NovelService loads and caches all pages in one chapter', () async {
     const chapterTitle = '\u7b2c\u4e00\u7ae0 \u521d\u89c1';
     const firstPage = '\u7b2c\u4e00\u9875\u6b63\u6587\u3002';

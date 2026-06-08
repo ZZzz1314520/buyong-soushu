@@ -58,6 +58,21 @@ void main() {
       expect(chapters.last.url, 'https://novel.example/book/2.html');
     });
 
+    test('extracts catalog page links for paged chapter lists', () {
+      final parser = NovelParser();
+      final catalogPage = parser.parseCatalogPage('''
+        <a href="1.html">$chapterTitle</a>
+        <a href="2.html">\u7b2c\u4e8c\u7ae0 \u98ce\u8d77</a>
+        <a href="catalog_2.html">\u4e0b\u4e00\u9875</a>
+        ''', Uri.parse('https://novel.example/book/catalog.html'));
+
+      expect(catalogPage.chapters, hasLength(2));
+      expect(
+        catalogPage.nextPageUrl,
+        'https://novel.example/book/catalog_2.html',
+      );
+    });
+
     test('filters search results by query and blocked hosts', () {
       final parser = NovelParser();
       final results = parser.parseSearchResults(

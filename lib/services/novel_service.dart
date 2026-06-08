@@ -67,7 +67,7 @@ class NovelService {
       uri,
       headers: const {'User-Agent': _userAgent},
     );
-    final catalog = _parser.parseCatalog(response.body, uri);
+    final catalog = await _loadCatalog(uri, response.body);
 
     if (catalog.isNotEmpty) {
       return Book(
@@ -91,6 +91,48 @@ class NovelService {
       sourceName: result.sourceName,
       chapters: [chapter],
     );
+  }
+
+  Future<List<Chapter>> _loadCatalog(Uri firstUri, String firstHtml) async {
+    final chapters = <Chapter>[];
+    final seenChapterUrls = <String>{};
+    final visitedCatalogPages = <String>{};
+    var uri = firstUri;
+    var html = firstHtml;
+
+    for (var page = 0; page < 20; page += 1) {
+      if (!visitedCatalogPages.add(uri.toString())) {
+        break;
+      }
+
+      final parsed = _parser.parseCatalogPage(html, uri);
+      for (final chapter in parsed.chapters) {
+        if (seenChapterUrls.add(chapter.url)) {
+          chapters.add(chapter);
+        }
+      }
+
+      final nextPageUrl = parsed.nextPageUrl;
+      if (nextPageUrl == null || nextPageUrl.isEmpty) {
+        break;
+      }
+      uri = Uri.parse(nextPageUrl);
+
+      try {
+        final response = await _client.get(
+          uri,
+          headers: const {'User-Agent': _userAgent},
+        );
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          break;
+        }
+        html = response.body;
+      } catch (_) {
+        break;
+      }
+    }
+
+    return chapters.length >= 2 ? chapters : [];
   }
 
   Future<Chapter> loadChapter(Chapter chapter) async {

@@ -23,6 +23,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
   Chapter? _chapter;
 
   int _flipPageIndex = 0; // current page in flip mode
+  var _controlsVisible = false;
 
   @override
   void initState() {
@@ -196,6 +197,10 @@ class _ReaderScreenState extends State<ReaderScreen> {
     );
   }
 
+  void _toggleControls() {
+    setState(() => _controlsVisible = !_controlsVisible);
+  }
+
   @override
   Widget build(BuildContext context) {
     final controller = ControllerScope.of(context);
@@ -205,29 +210,31 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
     return Scaffold(
       backgroundColor: colors.background,
-      appBar: AppBar(
-        backgroundColor: colors.background,
-        foregroundColor: colors.foreground,
-        title: Text(
-          book?.title ?? '阅读',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        actions: [
-          IconButton(
-            tooltip: '阅读设置',
-            onPressed: _showReaderSettings,
-            icon: const Icon(Icons.tune),
-          ),
-          IconButton(
-            tooltip: '目录',
-            onPressed: book == null || book.chapters.isEmpty
-                ? null
-                : () => _showCatalog(book),
-            icon: const Icon(Icons.format_list_bulleted),
-          ),
-        ],
-      ),
+      appBar: _controlsVisible
+          ? AppBar(
+              backgroundColor: colors.background,
+              foregroundColor: colors.foreground,
+              title: Text(
+                book?.title ?? '阅读',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              actions: [
+                IconButton(
+                  tooltip: '阅读设置',
+                  onPressed: _showReaderSettings,
+                  icon: const Icon(Icons.tune),
+                ),
+                IconButton(
+                  tooltip: '目录',
+                  onPressed: book == null || book.chapters.isEmpty
+                      ? null
+                      : () => _showCatalog(book),
+                  icon: const Icon(Icons.format_list_bulleted),
+                ),
+              ],
+            )
+          : null,
       body: _loading
           ? const Center(
               child: Column(
@@ -263,10 +270,11 @@ class _ReaderScreenState extends State<ReaderScreen> {
               colors: colors,
               initialPage: _flipPageIndex,
               onFlipPageChanged: (page) => _flipPageIndex = page,
+              onToggleControls: _toggleControls,
               onPrevious: _goPrevious,
               onNext: _goNext,
             ),
-      bottomNavigationBar: book == null
+      bottomNavigationBar: book == null || !_controlsVisible
           ? null
           : SafeArea(
               child: Padding(
@@ -313,6 +321,7 @@ class _ReaderBody extends StatelessWidget {
     required this.colors,
     required this.initialPage,
     required this.onFlipPageChanged,
+    required this.onToggleControls,
     required this.onPrevious,
     required this.onNext,
   });
@@ -323,6 +332,7 @@ class _ReaderBody extends StatelessWidget {
   final _ReaderColors colors;
   final int initialPage;
   final ValueChanged<int> onFlipPageChanged;
+  final VoidCallback onToggleControls;
   final VoidCallback onPrevious;
   final VoidCallback onNext;
 
@@ -335,6 +345,7 @@ class _ReaderBody extends StatelessWidget {
       colors: colors,
       initialPage: initialPage,
       onFlipPageChanged: onFlipPageChanged,
+      onToggleControls: onToggleControls,
       onPreviousChapter: onPrevious,
       onNextChapter: onNext,
     );
@@ -351,6 +362,7 @@ class _HorizontalReader extends StatefulWidget {
     required this.colors,
     required this.initialPage,
     required this.onFlipPageChanged,
+    required this.onToggleControls,
     required this.onPreviousChapter,
     required this.onNextChapter,
   });
@@ -361,6 +373,7 @@ class _HorizontalReader extends StatefulWidget {
   final _ReaderColors colors;
   final int initialPage;
   final ValueChanged<int> onFlipPageChanged;
+  final VoidCallback onToggleControls;
   final VoidCallback onPreviousChapter;
   final VoidCallback onNextChapter;
 
@@ -369,6 +382,11 @@ class _HorizontalReader extends StatefulWidget {
 }
 
 class _HorizontalReaderState extends State<_HorizontalReader> {
+  static const double _horizontalPadding = 20;
+  static const double _titleTopPadding = 8;
+  static const double _titleGap = 12;
+  static const double _pageBottomPadding = 42;
+
   final List<String> _pages = [];
   int _currentPage = 0;
   double _lastPageWidth = 0;
@@ -452,7 +470,7 @@ class _HorizontalReaderState extends State<_HorizontalReader> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final pageWidth = constraints.maxWidth - 40; // 20 px padding each side
+        final pageWidth = constraints.maxWidth - _horizontalPadding * 2;
 
         // Measure title height
         final titleTP = TextPainter(
@@ -460,11 +478,16 @@ class _HorizontalReaderState extends State<_HorizontalReader> {
           textDirection: TextDirection.ltr,
         )..layout(maxWidth: pageWidth);
 
-        final titleHeight = titleTP.height + 8; // spacing after title
-        final pageHeight = (constraints.maxHeight - titleHeight - 16).clamp(
-          60.0,
-          4000.0,
-        );
+        final lineGuard =
+            widget.settings.fontSize * widget.settings.lineHeight * 0.85;
+        final pageHeight =
+            (constraints.maxHeight -
+                    titleTP.height -
+                    _titleTopPadding -
+                    _titleGap -
+                    _pageBottomPadding -
+                    lineGuard)
+                .clamp(60.0, 4000.0);
 
         final needsRecompute =
             _pages.isEmpty ||
@@ -511,7 +534,12 @@ class _HorizontalReaderState extends State<_HorizontalReader> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+              padding: const EdgeInsets.fromLTRB(
+                _horizontalPadding,
+                _titleTopPadding,
+                _horizontalPadding,
+                0,
+              ),
               child: Text(
                 widget.title,
                 style: titleStyle,
@@ -519,35 +547,44 @@ class _HorizontalReaderState extends State<_HorizontalReader> {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: _titleGap),
             Expanded(
-              child: _PageFlipper(
-                pages: displayPages,
-                currentPage: displayPage,
-                bodyStyle: bodyStyle,
-                pageBackground: widget.colors.background,
-                enableAnimation: widget.settings.enableFlipAnimation,
-                onPageChanged: (page) {
-                  setState(() => _currentPage = page);
-                  widget.onFlipPageChanged(page);
-                },
-                onOverflowPrevious: widget.onPreviousChapter,
-                onOverflowNext: widget.onNextChapter,
-              ),
-            ),
-            // Page indicator
-            SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Center(
-                  child: Text(
-                    '${displayPage + 1} / ${displayPages.length}',
-                    style: TextStyle(
-                      color: widget.colors.foreground.withValues(alpha: 0.45),
-                      fontSize: 13,
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: _PageFlipper(
+                      pages: displayPages,
+                      currentPage: displayPage,
+                      bodyStyle: bodyStyle,
+                      pageBackground: widget.colors.background,
+                      enableAnimation: widget.settings.enableFlipAnimation,
+                      onPageChanged: (page) {
+                        setState(() => _currentPage = page);
+                        widget.onFlipPageChanged(page);
+                      },
+                      onCenterTap: widget.onToggleControls,
+                      onOverflowPrevious: widget.onPreviousChapter,
+                      onOverflowNext: widget.onNextChapter,
                     ),
                   ),
-                ),
+                  Positioned(
+                    left: _horizontalPadding,
+                    bottom: 6,
+                    child: SafeArea(
+                      top: false,
+                      right: false,
+                      child: Text(
+                        '${displayPage + 1} / ${displayPages.length}',
+                        style: TextStyle(
+                          color: widget.colors.foreground.withValues(
+                            alpha: 0.45,
+                          ),
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -567,6 +604,7 @@ class _PageFlipper extends StatefulWidget {
     required this.pageBackground,
     required this.enableAnimation,
     required this.onPageChanged,
+    required this.onCenterTap,
     required this.onOverflowPrevious,
     required this.onOverflowNext,
   });
@@ -577,6 +615,7 @@ class _PageFlipper extends StatefulWidget {
   final Color pageBackground;
   final bool enableAnimation;
   final ValueChanged<int> onPageChanged;
+  final VoidCallback onCenterTap;
   final VoidCallback onOverflowPrevious;
   final VoidCallback onOverflowNext;
 
@@ -759,6 +798,8 @@ class _PageFlipperState extends State<_PageFlipper>
       _goToPreviousPageOrChapter();
     } else if (x > width * 2 / 3) {
       _goToNextPageOrChapter();
+    } else {
+      widget.onCenterTap();
     }
   }
 
@@ -867,7 +908,12 @@ class _PageFlipperState extends State<_PageFlipper>
     Widget child = ColoredBox(
       color: widget.pageBackground,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
+        padding: const EdgeInsets.fromLTRB(
+          20,
+          0,
+          20,
+          _HorizontalReaderState._pageBottomPadding,
+        ),
         child: ClipRect(
           child: Text(
             text,
