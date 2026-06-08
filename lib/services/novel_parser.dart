@@ -515,6 +515,22 @@ class NovelParser {
         uri.queryParameters['uddg'] != null) {
       return Uri.tryParse(uri.queryParameters['uddg']!);
     }
+    if (uri.host.contains('google.') && uri.path == '/url') {
+      final target = uri.queryParameters['q'];
+      if (target != null) {
+        return Uri.tryParse(target);
+      }
+    }
+    for (final parameter in const ['url', 'u', 'to', 'target']) {
+      final target = uri.queryParameters[parameter];
+      if (target == null || !target.startsWith(RegExp('https?://'))) {
+        continue;
+      }
+      final parsed = Uri.tryParse(target);
+      if (parsed != null && !_isSearchHost(parsed.host)) {
+        return parsed;
+      }
+    }
     if (uri.scheme == 'http' || uri.scheme == 'https') {
       return uri;
     }
@@ -525,14 +541,40 @@ class NovelParser {
     if (uri.host.isEmpty) {
       return false;
     }
+    return !_isSearchHost(uri.host) && !_isBlockedReadableHost(uri.host);
+  }
+
+  bool _isSearchHost(String host) {
     const blockedHosts = [
       'bing.com',
       'duckduckgo.com',
       'google.com',
+      'google.com.hk',
       'baidu.com',
-      'wikipedia.org',
+      'sogou.com',
+      'so.com',
+      'sm.cn',
+      'brave.com',
+      'mojeek.com',
+      'qwant.com',
+      'startpage.com',
+      'ecosia.org',
+      'yep.com',
+      'yandex.com',
+      'yahoo.com',
     ];
-    return !blockedHosts.any(uri.host.contains);
+    return blockedHosts.any((blocked) => _hostMatches(host, blocked));
+  }
+
+  bool _isBlockedReadableHost(String host) {
+    const blockedHosts = ['wikipedia.org'];
+    return blockedHosts.any((blocked) => _hostMatches(host, blocked));
+  }
+
+  bool _hostMatches(String host, String blocked) {
+    final lowerHost = host.toLowerCase();
+    final lowerBlocked = blocked.toLowerCase();
+    return lowerHost == lowerBlocked || lowerHost.endsWith('.$lowerBlocked');
   }
 
   int _scoreSearchTitle(String title, String query) {

@@ -18,6 +18,7 @@ const settingsTab = '\u8bbe\u7f6e';
 const readingPreference = '\u9605\u8bfb\u504f\u597d';
 const readerSettings = '\u9605\u8bfb\u8bbe\u7f6e';
 const fontSizeLabel = '\u5b57\u4f53\u5927\u5c0f';
+const scrollMode = '\u6eda\u52a8';
 const sourceSection = '\u641c\u7d22\u6765\u6e90';
 const addSourceButton = '\u6dfb\u52a0';
 const saveButton = '\u4fdd\u5b58';
@@ -41,11 +42,6 @@ void main() {
       novelService: _FakeNovelService(),
       initialBooks: await library.loadBooks(),
     );
-    // Use vertical scroll mode for predictable widget testing
-    controller.updateReaderSettings(
-      controller.readerSettings.copyWith(pageTurnMode: PageTurnMode.verticalScroll),
-    );
-
     await tester.pumpWidget(NovelReaderApp(controller: controller));
 
     expect(find.text(shelfTitle), findsOneWidget);
@@ -73,6 +69,7 @@ void main() {
 
     expect(find.text(readerSettings), findsOneWidget);
     expect(find.text(fontSizeLabel), findsOneWidget);
+    expect(find.text(scrollMode), findsNothing);
   });
 
   testWidgets('settings only exposes search source controls', (tester) async {
@@ -85,15 +82,12 @@ void main() {
       novelService: _FakeNovelService(),
       initialBooks: await library.loadBooks(),
     );
-    controller.updateReaderSettings(
-      controller.readerSettings.copyWith(pageTurnMode: PageTurnMode.verticalScroll),
-    );
-
     await tester.pumpWidget(NovelReaderApp(controller: controller));
     await tester.tap(find.text(settingsTab));
     await tester.pumpAndSettle();
 
-    expect(find.text(readingPreference), findsNothing);
+    expect(find.text(readingPreference), findsOneWidget);
+    expect(find.text(scrollMode), findsNothing);
     expect(controller.sources.first.name, 'Bing');
 
     expect(find.text(sourceSection), findsOneWidget);

@@ -55,28 +55,8 @@ class SettingsScreen extends StatelessWidget {
                 ButtonSegment(value: ReaderTheme.dark, label: Text('夜间')),
               ],
               selected: {controller.readerSettings.theme},
-              onSelectionChanged: (selected) =>
-                  controller.updateReaderSettings(
+              onSelectionChanged: (selected) => controller.updateReaderSettings(
                 controller.readerSettings.copyWith(theme: selected.first),
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            child: SegmentedButton<PageTurnMode>(
-              segments: const [
-                ButtonSegment(
-                    value: PageTurnMode.horizontalFlip, label: Text('左右翻页')),
-                ButtonSegment(
-                    value: PageTurnMode.verticalScroll, label: Text('滚动')),
-                ButtonSegment(
-                    value: PageTurnMode.tapSides, label: Text('点击翻章')),
-              ],
-              selected: {controller.readerSettings.pageTurnMode},
-              onSelectionChanged: (selected) =>
-                  controller.updateReaderSettings(
-                controller.readerSettings.copyWith(
-                    pageTurnMode: selected.first),
               ),
             ),
           ),
@@ -118,8 +98,7 @@ class SettingsScreen extends StatelessWidget {
                       TextButton.icon(
                         onPressed: () async {
                           try {
-                            final results =
-                                await controller.testSource(source);
+                            final results = await controller.testSource(source);
                             if (context.mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
@@ -142,14 +121,18 @@ class SettingsScreen extends StatelessWidget {
                         icon: const Icon(Icons.play_arrow, size: 18),
                         label: const Text('测试'),
                       ),
-                      if (source.id != 'bing' && source.id != 'duckduckgo')
+                      if (!isDefaultSourceId(source.id))
                         TextButton.icon(
-                          onPressed: () =>
-                              controller.removeSource(source),
-                          icon: const Icon(Icons.delete_outline,
-                              size: 18, color: Colors.red),
-                          label: const Text('删除',
-                              style: TextStyle(color: Colors.red)),
+                          onPressed: () => controller.removeSource(source),
+                          icon: const Icon(
+                            Icons.delete_outline,
+                            size: 18,
+                            color: Colors.red,
+                          ),
+                          label: const Text(
+                            '删除',
+                            style: TextStyle(color: Colors.red),
+                          ),
                         ),
                     ],
                   ),

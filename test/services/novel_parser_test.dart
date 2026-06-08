@@ -75,5 +75,24 @@ void main() {
       expect(results, hasLength(1));
       expect(results.single.url, 'https://site.example/book');
     });
+
+    test('unwraps common search redirects before filtering results', () {
+      final parser = NovelParser();
+      final target = Uri.encodeComponent('https://novel.example/book/1.html');
+      final results = parser.parseSearchResults(
+        html:
+            '''
+        <a href="/url?q=$target">\u6d4b\u8bd5\u5c0f\u8bf4\u5168\u6587\u9605\u8bfb</a>
+        <a href="https://www.google.com/search?q=again">\u6d4b\u8bd5\u5c0f\u8bf4\u641c\u7d22</a>
+        ''',
+        searchUri: Uri.parse('https://www.google.com/search?q=test'),
+        sourceId: 'google',
+        sourceName: 'Google',
+        query: '\u6d4b\u8bd5\u5c0f\u8bf4',
+      );
+
+      expect(results, hasLength(1));
+      expect(results.single.url, 'https://novel.example/book/1.html');
+    });
   });
 }

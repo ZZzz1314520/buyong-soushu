@@ -161,8 +161,8 @@ class Book {
   final List<Chapter> chapters;
   final int currentChapterIndex;
   final DateTime? lastReadAt;
-  final double scrollPosition; // for scroll modes
-  final double chapterProgress; // 0-1 for flip mode
+  final double scrollPosition;
+  final double chapterProgress; // current page index in flip mode
 
   Book copyWith({
     String? id,
@@ -278,24 +278,180 @@ class ReaderSettings {
         (theme) => theme.name == json['theme'],
         orElse: () => ReaderTheme.paper,
       ),
-      pageTurnMode: PageTurnMode.values.firstWhere(
-        (mode) => mode.name == json['pageTurnMode'],
-        orElse: () => PageTurnMode.horizontalFlip,
-      ),
+      pageTurnMode: PageTurnMode.horizontalFlip,
       enableFlipAnimation: _safeBool(json['enableFlipAnimation'], true),
     );
   }
 }
 
+bool isDefaultSourceId(String sourceId) {
+  return _defaultSourceIds.contains(sourceId);
+}
+
+List<SearchSource> mergeDefaultSources(List<SearchSource> savedSources) {
+  if (savedSources.isEmpty) {
+    return defaultSources;
+  }
+
+  final savedById = {
+    for (final source in savedSources)
+      if (source.id.trim().isNotEmpty) source.id: source,
+  };
+  final merged = <SearchSource>[];
+
+  for (final source in defaultSources) {
+    final saved = savedById.remove(source.id);
+    merged.add(source.copyWith(enabled: saved?.enabled));
+  }
+
+  merged.addAll(
+    savedById.values.where(
+      (source) =>
+          source.name.trim().isNotEmpty &&
+          source.urlTemplate.contains('{query}'),
+    ),
+  );
+  return merged;
+}
+
+final _defaultSourceIds = defaultSources.map((source) => source.id).toSet();
+
 const defaultSources = [
   SearchSource(
     id: 'bing',
-    name: 'Bing',
+    name: 'Bing 小说',
     urlTemplate: 'https://www.bing.com/search?q={query}%20%E5%B0%8F%E8%AF%B4',
   ),
   SearchSource(
+    id: 'bing-cn',
+    name: 'Bing 国内',
+    urlTemplate: 'https://cn.bing.com/search?q={query}%20%E5%B0%8F%E8%AF%B4',
+  ),
+  SearchSource(
     id: 'duckduckgo',
-    name: 'DuckDuckGo',
+    name: 'DuckDuckGo 小说',
     urlTemplate: 'https://duckduckgo.com/html/?q={query}%20%E5%B0%8F%E8%AF%B4',
+  ),
+  SearchSource(
+    id: 'duckduckgo-lite',
+    name: 'DuckDuckGo Lite',
+    urlTemplate:
+        'https://lite.duckduckgo.com/lite/?q={query}%20%E5%B0%8F%E8%AF%B4',
+  ),
+  SearchSource(
+    id: 'brave',
+    name: 'Brave Search',
+    urlTemplate:
+        'https://search.brave.com/search?q={query}%20%E5%B0%8F%E8%AF%B4',
+  ),
+  SearchSource(
+    id: 'mojeek',
+    name: 'Mojeek',
+    urlTemplate: 'https://www.mojeek.com/search?q={query}%20%E5%B0%8F%E8%AF%B4',
+  ),
+  SearchSource(
+    id: 'qwant',
+    name: 'Qwant',
+    urlTemplate: 'https://www.qwant.com/?q={query}%20%E5%B0%8F%E8%AF%B4&t=web',
+  ),
+  SearchSource(
+    id: 'startpage',
+    name: 'Startpage',
+    urlTemplate:
+        'https://www.startpage.com/sp/search?query={query}%20%E5%B0%8F%E8%AF%B4',
+  ),
+  SearchSource(
+    id: 'ecosia',
+    name: 'Ecosia',
+    urlTemplate: 'https://www.ecosia.org/search?q={query}%20%E5%B0%8F%E8%AF%B4',
+  ),
+  SearchSource(
+    id: 'yep',
+    name: 'Yep',
+    urlTemplate: 'https://yep.com/web?q={query}%20%E5%B0%8F%E8%AF%B4',
+  ),
+  SearchSource(
+    id: 'yandex',
+    name: 'Yandex',
+    urlTemplate: 'https://yandex.com/search/?text={query}%20%E5%B0%8F%E8%AF%B4',
+  ),
+  SearchSource(
+    id: 'yahoo',
+    name: 'Yahoo',
+    urlTemplate:
+        'https://search.yahoo.com/search?p={query}%20%E5%B0%8F%E8%AF%B4',
+  ),
+  SearchSource(
+    id: 'google',
+    name: 'Google',
+    urlTemplate: 'https://www.google.com/search?q={query}%20%E5%B0%8F%E8%AF%B4',
+  ),
+  SearchSource(
+    id: 'baidu',
+    name: '百度',
+    urlTemplate: 'https://www.baidu.com/s?wd={query}%20%E5%B0%8F%E8%AF%B4',
+  ),
+  SearchSource(
+    id: 'sogou',
+    name: '搜狗',
+    urlTemplate: 'https://www.sogou.com/web?query={query}%20%E5%B0%8F%E8%AF%B4',
+  ),
+  SearchSource(
+    id: 'so360',
+    name: '360 搜索',
+    urlTemplate: 'https://www.so.com/s?q={query}%20%E5%B0%8F%E8%AF%B4',
+  ),
+  SearchSource(
+    id: 'sm',
+    name: '神马搜索',
+    urlTemplate: 'https://yz.m.sm.cn/s?q={query}%20%E5%B0%8F%E8%AF%B4',
+  ),
+  SearchSource(
+    id: 'bing-latest',
+    name: 'Bing 最新章节',
+    urlTemplate:
+        'https://www.bing.com/search?q={query}%20%E6%9C%80%E6%96%B0%E7%AB%A0%E8%8A%82',
+  ),
+  SearchSource(
+    id: 'bing-fulltext',
+    name: 'Bing 全文阅读',
+    urlTemplate:
+        'https://www.bing.com/search?q={query}%20%E5%85%A8%E6%96%87%E9%98%85%E8%AF%BB',
+  ),
+  SearchSource(
+    id: 'bing-catalog',
+    name: 'Bing 章节目录',
+    urlTemplate:
+        'https://www.bing.com/search?q={query}%20%E7%AB%A0%E8%8A%82%E7%9B%AE%E5%BD%95',
+  ),
+  SearchSource(
+    id: 'duckduckgo-latest',
+    name: 'DuckDuckGo 最新章节',
+    urlTemplate:
+        'https://duckduckgo.com/html/?q={query}%20%E6%9C%80%E6%96%B0%E7%AB%A0%E8%8A%82',
+  ),
+  SearchSource(
+    id: 'duckduckgo-fulltext',
+    name: 'DuckDuckGo 全文阅读',
+    urlTemplate:
+        'https://duckduckgo.com/html/?q={query}%20%E5%85%A8%E6%96%87%E9%98%85%E8%AF%BB',
+  ),
+  SearchSource(
+    id: 'brave-latest',
+    name: 'Brave 最新章节',
+    urlTemplate:
+        'https://search.brave.com/search?q={query}%20%E6%9C%80%E6%96%B0%E7%AB%A0%E8%8A%82',
+  ),
+  SearchSource(
+    id: 'baidu-latest',
+    name: '百度 最新章节',
+    urlTemplate:
+        'https://www.baidu.com/s?wd={query}%20%E6%9C%80%E6%96%B0%E7%AB%A0%E8%8A%82',
+  ),
+  SearchSource(
+    id: 'sogou-fulltext',
+    name: '搜狗 全文阅读',
+    urlTemplate:
+        'https://www.sogou.com/web?query={query}%20%E5%85%A8%E6%96%87%E9%98%85%E8%AF%BB',
   ),
 ];

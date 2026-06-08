@@ -39,9 +39,10 @@ class LocalLibrary {
       return defaultSources;
     }
     final decoded = jsonDecode(raw) as List<dynamic>;
-    return decoded
+    final savedSources = decoded
         .map((source) => SearchSource.fromJson(source as Map<String, Object?>))
         .toList();
+    return mergeDefaultSources(savedSources);
   }
 
   Future<void> saveSources(List<SearchSource> sources) {

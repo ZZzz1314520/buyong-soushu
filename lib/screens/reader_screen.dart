@@ -22,7 +22,6 @@ class _ReaderScreenState extends State<ReaderScreen> {
   String? _error;
   Chapter? _chapter;
 
-  final ScrollController _scrollController = ScrollController();
   int _flipPageIndex = 0; // current page in flip mode
 
   @override
@@ -42,7 +41,6 @@ class _ReaderScreenState extends State<ReaderScreen> {
   void dispose() {
     _savePosition();
     WakelockPlus.disable();
-    _scrollController.dispose();
     super.dispose();
   }
 
@@ -50,32 +48,8 @@ class _ReaderScreenState extends State<ReaderScreen> {
     final book = _bookOrNull();
     if (book == null) return;
     final controller = ControllerScope.of(context);
-    final settings = controller.readerSettings;
-    double scrollPos = 0;
-    double progress = 0;
-    if (settings.pageTurnMode == PageTurnMode.horizontalFlip) {
-      progress = _flipPageIndex.toDouble();
-    } else {
-      scrollPos = _scrollController.hasClients ? _scrollController.offset : 0;
-    }
-    await controller.updateBook(
-      book.copyWith(scrollPosition: scrollPos, chapterProgress: progress),
-    );
-  }
-
-  void _restorePosition() {
-    final settings = ControllerScope.of(context).readerSettings;
-    if (settings.pageTurnMode != PageTurnMode.horizontalFlip) {
-      final book = _bookOrNull();
-      if (book != null && _scrollController.hasClients) {
-        _scrollController.jumpTo(book.scrollPosition.clamp(
-          0,
-          _scrollController.position.maxScrollExtent,
-        ));
-      }
-    }
-    // For flip mode, the page index is restored from the parent via
-    // _HorizontalReader based on book.chapterProgress.
+    final progress = _flipPageIndex.toDouble();
+    await controller.updateBook(book.copyWith(chapterProgress: progress));
   }
 
   Book? _bookOrNull() {
@@ -105,6 +79,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
     });
 
     try {
+      final shouldRestorePage = _chapterIndex == book.currentChapterIndex;
       final chapter = await controller.ensureChapterLoaded(book, _chapterIndex);
       if (!mounted) {
         return;
@@ -114,11 +89,10 @@ class _ReaderScreenState extends State<ReaderScreen> {
         _chapterIndex = _chapterIndex
             .clamp(0, book.chapters.length - 1)
             .toInt();
+        _flipPageIndex = shouldRestorePage ? book.chapterProgress.round() : 0;
       });
       // Pre-fetch next chapter in background
       controller.prefetchChapter(book, _chapterIndex + 1);
-      // Restore scroll position after content is loaded
-      WidgetsBinding.instance.addPostFrameCallback((_) => _restorePosition());
     } catch (error) {
       if (!mounted) {
         return;
@@ -272,10 +246,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      _error!,
-                      textAlign: TextAlign.center,
-                    ),
+                    Text(_error!, textAlign: TextAlign.center),
                     const SizedBox(height: 16),
                     FilledButton.tonal(
                       onPressed: _loadChapter,
@@ -290,7 +261,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
               content: _chapter?.content ?? '',
               settings: settings,
               colors: colors,
-              scrollController: _scrollController,
+              initialPage: _flipPageIndex,
               onFlipPageChanged: (page) => _flipPageIndex = page,
               onPrevious: _goPrevious,
               onNext: _goNext,
@@ -340,7 +311,7 @@ class _ReaderBody extends StatelessWidget {
     required this.content,
     required this.settings,
     required this.colors,
-    required this.scrollController,
+    required this.initialPage,
     required this.onFlipPageChanged,
     required this.onPrevious,
     required this.onNext,
@@ -350,79 +321,22 @@ class _ReaderBody extends StatelessWidget {
   final String content;
   final ReaderSettings settings;
   final _ReaderColors colors;
-  final ScrollController scrollController;
+  final int initialPage;
   final ValueChanged<int> onFlipPageChanged;
   final VoidCallback onPrevious;
   final VoidCallback onNext;
 
   @override
   Widget build(BuildContext context) {
-    if (settings.pageTurnMode == PageTurnMode.horizontalFlip) {
-      return _HorizontalReader(
-        title: title,
-        content: content,
-        settings: settings,
-        colors: colors,
-        onFlipPageChanged: onFlipPageChanged,
-        onPreviousChapter: onPrevious,
-        onNextChapter: onNext,
-      );
-    }
-
-    final body = SingleChildScrollView(
-      controller: scrollController,
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 36),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: TextStyle(
-              color: colors.foreground,
-              fontSize: settings.fontSize + 4,
-              fontWeight: FontWeight.w800,
-              height: 1.35,
-            ),
-          ),
-          const SizedBox(height: 20),
-          SelectableText(
-            content.isEmpty ? '正文解析为空，请尝试在目录中选择其他章节。' : content,
-            style: TextStyle(
-              color: colors.foreground,
-              fontSize: settings.fontSize,
-              height: settings.lineHeight,
-            ),
-          ),
-        ],
-      ),
-    );
-
-    if (settings.pageTurnMode != PageTurnMode.tapSides) {
-      return body;
-    }
-
-    return Stack(
-      children: [
-        body,
-        Row(
-          children: [
-            Expanded(
-              child: GestureDetector(
-                behavior: HitTestBehavior.translucent,
-                onTap: onPrevious,
-                child: const SizedBox.expand(),
-              ),
-            ),
-            Expanded(
-              child: GestureDetector(
-                behavior: HitTestBehavior.translucent,
-                onTap: onNext,
-                child: const SizedBox.expand(),
-              ),
-            ),
-          ],
-        ),
-      ],
+    return _HorizontalReader(
+      title: title,
+      content: content,
+      settings: settings,
+      colors: colors,
+      initialPage: initialPage,
+      onFlipPageChanged: onFlipPageChanged,
+      onPreviousChapter: onPrevious,
+      onNextChapter: onNext,
     );
   }
 }
@@ -435,6 +349,7 @@ class _HorizontalReader extends StatefulWidget {
     required this.content,
     required this.settings,
     required this.colors,
+    required this.initialPage,
     required this.onFlipPageChanged,
     required this.onPreviousChapter,
     required this.onNextChapter,
@@ -444,6 +359,7 @@ class _HorizontalReader extends StatefulWidget {
   final String content;
   final ReaderSettings settings;
   final _ReaderColors colors;
+  final int initialPage;
   final ValueChanged<int> onFlipPageChanged;
   final VoidCallback onPreviousChapter;
   final VoidCallback onNextChapter;
@@ -461,6 +377,23 @@ class _HorizontalReaderState extends State<_HorizontalReader> {
   double _lastFontSize = 0;
   double _lastLineHeight = 0;
   bool _scheduledUpdate = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentPage = widget.initialPage;
+  }
+
+  @override
+  void didUpdateWidget(_HorizontalReader oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.content != widget.content ||
+        oldWidget.title != widget.title ||
+        oldWidget.initialPage != widget.initialPage) {
+      _currentPage = widget.initialPage;
+      _pages.clear();
+    }
+  }
 
   @override
   void dispose() {
@@ -528,10 +461,13 @@ class _HorizontalReaderState extends State<_HorizontalReader> {
         )..layout(maxWidth: pageWidth);
 
         final titleHeight = titleTP.height + 8; // spacing after title
-        final pageHeight =
-            (constraints.maxHeight - titleHeight - 16).clamp(60.0, 4000.0);
+        final pageHeight = (constraints.maxHeight - titleHeight - 16).clamp(
+          60.0,
+          4000.0,
+        );
 
-        final needsRecompute = _pages.isEmpty ||
+        final needsRecompute =
+            _pages.isEmpty ||
             _lastContent != widget.content ||
             _lastFontSize != widget.settings.fontSize ||
             _lastLineHeight != widget.settings.lineHeight ||
@@ -585,28 +521,19 @@ class _HorizontalReaderState extends State<_HorizontalReader> {
             ),
             const SizedBox(height: 12),
             Expanded(
-              child: displayPages.length == 1 &&
-                      widget.settings.enableFlipAnimation == false
-                  ? // Single page – render without PageView overhead
-                  Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: SelectableText(
-                        displayPages.first,
-                        style: bodyStyle,
-                      ),
-                    )
-                  : _PageFlipper(
-                      pages: displayPages,
-                      currentPage: displayPage,
-                      bodyStyle: bodyStyle,
-                      enableAnimation: widget.settings.enableFlipAnimation,
-                      onPageChanged: (page) {
-                        setState(() => _currentPage = page);
-                        widget.onFlipPageChanged(page);
-                      },
-                      onOverflowPrevious: widget.onPreviousChapter,
-                      onOverflowNext: widget.onNextChapter,
-                    ),
+              child: _PageFlipper(
+                pages: displayPages,
+                currentPage: displayPage,
+                bodyStyle: bodyStyle,
+                pageBackground: widget.colors.background,
+                enableAnimation: widget.settings.enableFlipAnimation,
+                onPageChanged: (page) {
+                  setState(() => _currentPage = page);
+                  widget.onFlipPageChanged(page);
+                },
+                onOverflowPrevious: widget.onPreviousChapter,
+                onOverflowNext: widget.onNextChapter,
+              ),
             ),
             // Page indicator
             SafeArea(
@@ -637,6 +564,7 @@ class _PageFlipper extends StatefulWidget {
     required this.pages,
     required this.currentPage,
     required this.bodyStyle,
+    required this.pageBackground,
     required this.enableAnimation,
     required this.onPageChanged,
     required this.onOverflowPrevious,
@@ -646,6 +574,7 @@ class _PageFlipper extends StatefulWidget {
   final List<String> pages;
   final int currentPage;
   final TextStyle bodyStyle;
+  final Color pageBackground;
   final bool enableAnimation;
   final ValueChanged<int> onPageChanged;
   final VoidCallback onOverflowPrevious;
@@ -723,8 +652,7 @@ class _PageFlipperState extends State<_PageFlipper>
     if (!_isDragging) return;
     final delta = details.globalPosition.dx - _dragStartX;
     final screenWidth = MediaQuery.of(context).size.width;
-    final fraction =
-        (delta.abs() / screenWidth).clamp(0.0, 1.0);
+    final fraction = (delta.abs() / screenWidth).clamp(0.0, 1.0);
 
     if (delta < 0 && _displayPage < widget.pages.length - 1) {
       // Swiping left → next page
@@ -758,18 +686,18 @@ class _PageFlipperState extends State<_PageFlipper>
   void _commitFlip() {
     if (_flipForward) {
       if (_displayPage < widget.pages.length - 1) {
-        _flipController
-            ?.forward()
-            .then((_) => _afterFlipComplete(forward: true));
+        _flipController?.forward().then(
+          (_) => _afterFlipComplete(forward: true),
+        );
       } else {
         _revertFlip();
         widget.onOverflowNext();
       }
     } else {
       if (_displayPage > 0) {
-        _flipController
-            ?.forward()
-            .then((_) => _afterFlipComplete(forward: false));
+        _flipController?.forward().then(
+          (_) => _afterFlipComplete(forward: false),
+        );
       } else {
         _revertFlip();
         widget.onOverflowPrevious();
@@ -794,15 +722,56 @@ class _PageFlipperState extends State<_PageFlipper>
     widget.onPageChanged(_displayPage);
   }
 
+  void _goToPreviousPageOrChapter() {
+    if (_displayPage > 0) {
+      _changePage(_displayPage - 1);
+    } else {
+      widget.onOverflowPrevious();
+    }
+  }
+
+  void _goToNextPageOrChapter() {
+    if (_displayPage < widget.pages.length - 1) {
+      _changePage(_displayPage + 1);
+    } else {
+      widget.onOverflowNext();
+    }
+  }
+
+  void _changePage(int page) {
+    final safePage = page.clamp(0, widget.pages.length - 1).toInt();
+    if (safePage == _displayPage) return;
+    setState(() => _displayPage = safePage);
+    if (!widget.enableAnimation && _pageController.hasClients) {
+      _pageController.animateToPage(
+        safePage,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+      );
+    }
+    widget.onPageChanged(safePage);
+  }
+
+  void _onTapUp(TapUpDetails details) {
+    final width = context.size?.width ?? MediaQuery.of(context).size.width;
+    if (details.localPosition.dx < width / 2) {
+      _goToPreviousPageOrChapter();
+    } else {
+      _goToNextPageOrChapter();
+    }
+  }
+
   Widget _buildAnimated() {
     final flipValue = _flipController?.value ?? 0;
     final pageText = widget.pages[_displayPage];
 
     // Page underneath (revealed as top page flips away)
     Widget? underneath;
-    if (_flipForward && _displayPage < widget.pages.length - 1) {
+    if (flipValue > 0.001 &&
+        _flipForward &&
+        _displayPage < widget.pages.length - 1) {
       underneath = _pageWidget(widget.pages[_displayPage + 1]);
-    } else if (!_flipForward && _displayPage > 0) {
+    } else if (flipValue > 0.001 && !_flipForward && _displayPage > 0) {
       underneath = _pageWidget(widget.pages[_displayPage - 1]);
     }
 
@@ -825,6 +794,7 @@ class _PageFlipperState extends State<_PageFlipper>
     }
 
     return GestureDetector(
+      onTapUp: _onTapUp,
       onHorizontalDragStart: _onDragStart,
       onHorizontalDragUpdate: _onDragUpdate,
       onHorizontalDragEnd: _onDragEnd,
@@ -837,8 +807,7 @@ class _PageFlipperState extends State<_PageFlipper>
           if (flipValue > 0.02)
             Positioned(
               left: _flipForward
-                  ? (1 - flipValue) *
-                      (MediaQuery.of(context).size.width - 40)
+                  ? (1 - flipValue) * (MediaQuery.of(context).size.width - 40)
                   : flipValue * (MediaQuery.of(context).size.width - 40),
               top: 0,
               bottom: 0,
@@ -870,16 +839,20 @@ class _PageFlipperState extends State<_PageFlipper>
   // ── non-animated path (standard PageView) ─────────────────────────────
 
   Widget _buildPlainPageView() {
-    return PageView.builder(
-      controller: _pageController,
-      itemCount: widget.pages.length,
-      onPageChanged: (page) {
-        setState(() => _displayPage = page);
-        widget.onPageChanged(page);
-      },
-      itemBuilder: (context, index) {
-        return _pageWidget(widget.pages[index]);
-      },
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTapUp: _onTapUp,
+      child: PageView.builder(
+        controller: _pageController,
+        itemCount: widget.pages.length,
+        onPageChanged: (page) {
+          setState(() => _displayPage = page);
+          widget.onPageChanged(page);
+        },
+        itemBuilder: (context, index) {
+          return _pageWidget(widget.pages[index]);
+        },
+      ),
     );
   }
 
@@ -890,9 +863,12 @@ class _PageFlipperState extends State<_PageFlipper>
     double? rotateY,
     Alignment alignment = Alignment.centerLeft,
   }) {
-    Widget child = Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: SelectableText(text, style: widget.bodyStyle),
+    Widget child = ColoredBox(
+      color: widget.pageBackground,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: SelectableText(text, style: widget.bodyStyle),
+      ),
     );
 
     if (rotateY != null && rotateY.abs() > 0.001) {
@@ -989,35 +965,14 @@ class _ReaderSettingsSheet extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          SegmentedButton<PageTurnMode>(
-            segments: const [
-              ButtonSegment(
-                value: PageTurnMode.horizontalFlip,
-                label: Text('左右翻页'),
-              ),
-              ButtonSegment(
-                value: PageTurnMode.verticalScroll,
-                label: Text('滚动'),
-              ),
-              ButtonSegment(value: PageTurnMode.tapSides, label: Text('点击翻章')),
-            ],
-            selected: {settings.pageTurnMode},
-            onSelectionChanged: (selected) => controller.updateReaderSettings(
-              settings.copyWith(pageTurnMode: selected.first),
+          SwitchListTile(
+            title: const Text('翻书动画'),
+            value: settings.enableFlipAnimation,
+            onChanged: (value) => controller.updateReaderSettings(
+              settings.copyWith(enableFlipAnimation: value),
             ),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 4),
           ),
-          if (settings.pageTurnMode == PageTurnMode.horizontalFlip) ...[
-            const SizedBox(height: 12),
-            SwitchListTile(
-              title: const Text('翻书动画'),
-              subtitle: const Text('左右翻页时显示仿真的翻书效果'),
-              value: settings.enableFlipAnimation,
-              onChanged: (value) => controller.updateReaderSettings(
-                settings.copyWith(enableFlipAnimation: value),
-              ),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-            ),
-          ],
         ],
       ),
     );

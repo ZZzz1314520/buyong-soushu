@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -36,14 +37,89 @@ void main() {
       const ReaderSettings(
         fontSize: 24,
         theme: ReaderTheme.dark,
-        pageTurnMode: PageTurnMode.tapSides,
+        pageTurnMode: PageTurnMode.horizontalFlip,
       ),
     );
 
     expect((await library.loadBooks()).single.title, '测试小说');
-    expect(library.loadSources().single.name, '自定义');
+    final sources = library.loadSources();
+    expect(sources.length, defaultSources.length + 1);
+    expect(sources.first.id, defaultSources.first.id);
+    expect(sources.last.name, '自定义');
     expect(library.loadReaderSettings().fontSize, 24);
     expect(library.loadReaderSettings().theme, ReaderTheme.dark);
-    expect(library.loadReaderSettings().pageTurnMode, PageTurnMode.tapSides);
+    expect(
+      library.loadReaderSettings().pageTurnMode,
+      PageTurnMode.horizontalFlip,
+    );
+  });
+
+  test(
+    'LocalLibrary migrates removed page turn modes to horizontal flip',
+    () async {
+      SharedPreferences.setMockInitialValues({
+        'reader.settings.v1': jsonEncode({
+          'fontSize': 24,
+          'lineHeight': 1.7,
+          'theme': 'dark',
+          'pageTurnMode': 'verticalScroll',
+          'enableFlipAnimation': false,
+        }),
+      });
+      final preferences = await SharedPreferences.getInstance();
+      final library = LocalLibrary(preferences);
+
+      final settings = library.loadReaderSettings();
+
+      expect(settings.fontSize, 24);
+      expect(settings.theme, ReaderTheme.dark);
+      expect(settings.pageTurnMode, PageTurnMode.horizontalFlip);
+      expect(settings.enableFlipAnimation, isFalse);
+    },
+  );
+
+  test(
+    'LocalLibrary merges new default sources into saved source settings',
+    () async {
+      SharedPreferences.setMockInitialValues({
+        'search.sources.v1': jsonEncode([
+          {
+            'id': 'bing',
+            'name': 'Old Bing',
+            'urlTemplate': 'https://old.example?q={query}',
+            'enabled': false,
+          },
+          {
+            'id': 'custom',
+            'name': '自定义',
+            'urlTemplate': 'https://example.com/search?q={query}',
+            'enabled': true,
+          },
+        ]),
+      });
+      final preferences = await SharedPreferences.getInstance();
+      final library = LocalLibrary(preferences);
+
+      final sources = library.loadSources();
+
+      expect(sources.length, defaultSources.length + 1);
+      expect(sources.first.id, 'bing');
+      expect(sources.first.name, 'Bing 小说');
+      expect(sources.first.enabled, isFalse);
+      expect(sources.any((source) => source.id == 'duckduckgo-lite'), isTrue);
+      expect(sources.last.id, 'custom');
+    },
+  );
+
+  test('default search source catalog has many unique query templates', () {
+    expect(defaultSources.length, greaterThanOrEqualTo(20));
+    expect(
+      defaultSources.map((source) => source.id).toSet(),
+      hasLength(defaultSources.length),
+    );
+    expect(
+      defaultSources.every((source) => source.urlTemplate.contains('{query}')),
+      isTrue,
+    );
   });
 }
