@@ -105,7 +105,7 @@ All models are immutable with `copyWith`, have `toJson()`/`factory fromJson()` f
 - Reading settings bottom sheet (font size slider, line height slider, theme segments, flip animation toggle)
 - Chapter catalog bottom sheet (tap to jump)
 - Previous/next chapter buttons in bottom bar
-- Horizontal page turns: left/right swipe changes pages, left/right half-screen tap changes pages or overflows to adjacent chapters.
+- Horizontal page turns: left/right swipe changes pages; tapping the left third goes to the previous page, tapping the right third goes to the next page, and tapping the center third does nothing.
 
 ## Tests
 

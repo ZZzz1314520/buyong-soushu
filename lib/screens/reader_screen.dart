@@ -754,9 +754,10 @@ class _PageFlipperState extends State<_PageFlipper>
 
   void _onTapUp(TapUpDetails details) {
     final width = context.size?.width ?? MediaQuery.of(context).size.width;
-    if (details.localPosition.dx < width / 2) {
+    final x = details.localPosition.dx;
+    if (x < width / 3) {
       _goToPreviousPageOrChapter();
-    } else {
+    } else if (x > width * 2 / 3) {
       _goToNextPageOrChapter();
     }
   }
@@ -867,7 +868,13 @@ class _PageFlipperState extends State<_PageFlipper>
       color: widget.pageBackground,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20),
-        child: SelectableText(text, style: widget.bodyStyle),
+        child: ClipRect(
+          child: Text(
+            text,
+            style: widget.bodyStyle,
+            overflow: TextOverflow.clip,
+          ),
+        ),
       ),
     );
 
@@ -892,7 +899,6 @@ class _PageFlipperState extends State<_PageFlipper>
     return _buildPlainPageView();
   }
 }
-
 // ─── Reader settings sheet ──────────────────────────────────────────────
 
 class _ReaderSettingsSheet extends StatelessWidget {
